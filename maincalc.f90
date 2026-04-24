@@ -54,7 +54,7 @@ do while (runTime < maxTime)
     prevPumpPressure         = wellPres(1)
     prevDrilledRadius        = equivDrilledCavityRadius
 !dkr
-    prevCavityRadius         = reposRadiusH(firstIntactZone)
+    prevCavityRadius         = reposRadiusH(firstFailedZone)
     prevTensileRadius        = reposRadiusH(maxTensileFailedIndex+1)
     prevWasteBoundaryPoreVelocity = wasteBoundaryPoreVelocity
     prevWasteInWell          = totalWasteInWell
@@ -120,11 +120,11 @@ do while (runTime < maxTime)
 
     ! radius
     curDrilledRadius = equivDrilledCavityRadius
-    curCavityRadius = reposRadiusH(firstIntactZone)
+    curCavityRadius = reposRadiusH(firstFailedZone)
     if (maxTensileFailedIndex > 0) then
       curTensileRadius = reposRadiusH(maxTensileFailedIndex+1)
     else
-      curTensileRadius = reposRadiusH(firstIntactZone)
+      curTensileRadius = reposRadiusH(firstFailedZone)
     end if
 
 
@@ -223,14 +223,14 @@ oldCellControl   = cellControl(oldStepControl)
 
 ! RM2019 - changed to be a proper inequality comparison for REAL
   if (ABS(cavityPres) > 0.0) then !skip for test case #1
-    i = firstIntactZone
+    i = firstFailedZone
     dCoeff(i) = permeability(i)*invPorosity(i)*gasFac*DSqrt(psi(i))
     reposAllowedDeltaTime = reposDR(i)**2/DCoeff(i)
     cellControl(2)  = i
   endif
 !trz
 
-  do i = firstIntactZone+1, numReposZones
+  do i = firstFailedZone+1, numReposZones
     dCoeff(i) = permeability(i)*invPorosity(i)*gasFac*DSqrt(psi(i))
     DT = reposDR(i)**2/DCoeff(i)
     if (DT < reposAllowedDeltaTime) then
@@ -253,6 +253,12 @@ oldCellControl   = cellControl(oldStepControl)
           !--------------------
 
 if (runtime > (timeOfPenetration-1.0)) then
+  ! 2026 BC-revision: governing cell for the tensile-failure timestep limit
+  ! is the inner edge of the intact region (firstIntactZone, NEW), where
+  ! tensile failure is actively progressing. The old code used firstIntactZone
+  ! (now firstFailedZone) -- the cavity wall -- which under the new scheme is
+  ! at the inner edge of the already-failed annulus, no longer the location
+  ! where the failure-rate constraint is most restrictive.
   tensileFailureAllowedDeltaTime = 0.1*tensileFailureTime(firstIntactZone)
   if (allowedDeltaTime > tensileFailureAllowedDeltaTime) then
     allowedDeltaTime = tensileFailureAllowedDeltaTime

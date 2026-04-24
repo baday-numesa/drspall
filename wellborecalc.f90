@@ -553,27 +553,27 @@ else
 
 
     ! test for possible drilling removal
-    if (equivDrilledCavityRadius >= (reposRadiusH(firstIntactZone+1))) then
-      tensileFailureStarted  (firstIntactZone) = .TRUE.
-      tensileFailureCompleted(firstIntactZone) = .TRUE.
-      fractionTensileFailed  (firstIntactZone) = 1.0d0
-      shearFailed            (firstIntactZone) = .TRUE.
-      fluidizationStarted    (firstIntactZone) = .TRUE.
-      fluidizationCompleted  (firstIntactZone) = .TRUE.
-      fractionFluidized      (firstIntactZone) = 1.0d0
-      drillingfailure        (firstIntactZone) = -1.0d0
+    if (equivDrilledCavityRadius >= (reposRadiusH(firstFailedZone+1))) then
+      tensileFailureStarted  (firstFailedZone) = .TRUE.
+      tensileFailureCompleted(firstFailedZone) = .TRUE.
+      fractionTensileFailed  (firstFailedZone) = 1.0d0
+      shearFailed            (firstFailedZone) = .TRUE.
+      fluidizationStarted    (firstFailedZone) = .TRUE.
+      fluidizationCompleted  (firstFailedZone) = .TRUE.
+      fractionFluidized      (firstFailedZone) = 1.0d0
+      drillingfailure        (firstFailedZone) = -1.0d0
 
 ! Allow resetting of Lt region near wellbore after new zone
 	  surfaceFailureAllowed = .True.
 
-      deltaVol = reposVol(firstIntactZone)
+      deltaVol = reposVol(firstFailedZone)
       TotVol   = TotVol + deltaVol*(1.0d0-repositoryInitialPorosity)
 
       deltaVolFromDrilling = deltaVol
       deltaGasFromDrilling = deltaVol*repositoryInitialPorosity*gasBaseDensity* &
-                             (reposPres(firstIntactZone)/AtmosphericPressure)
+                             (reposPres(firstFailedZone)/AtmosphericPressure)
       deltaWasteFromDrilling = deltaVol*(1.0d0-repositoryInitialPorosity)*WasteDensity
-      firstIntactZone = firstIntactZone+1
+      firstFailedZone = firstFailedZone+1
 
     end if
 
@@ -586,7 +586,7 @@ else
 !-----------------------------------------------------------------------
 
   !calculate Ergun fluidization velocity (use only first intact zone velocity)
-  curDensity = gasBaseDensity*(reposPres(firstIntactZone)/AtmosphericPressure)
+  curDensity = gasBaseDensity*(reposPres(firstFailedZone)/AtmosphericPressure)
 
 
   a = (1.75d0/(ShapeFactor*repositoryInitialPorosity**3)) &
@@ -614,7 +614,7 @@ else
 
    ! allow only those zones beginning at cavity that have completed failure
    ! to begin fluidization
-   i = firstIntactZone
+   i = firstFailedZone
    do while (tensileFailureCompleted(i)  .and. i <= numReposZones)
 
       ! fluidization initialization
@@ -646,7 +646,7 @@ else
         endif
 
         ! fluidization completed
-        if (fractionFluidized(i) > 1.0 .AND. i == firstIntactZone) then
+        if (fractionFluidized(i) > 1.0 .AND. i == firstFailedZone) then
           fractionFluidized    (i) = 1.0
           fluidizationCompleted(i) = .TRUE.
 
@@ -669,7 +669,7 @@ else
           deltaWasteFromFluidization = deltaWasteFromFluidization &
                     +deltaVol*(1.0d0-repositoryInitialPorosity)*WasteDensity
 
-          firstIntactZone = i+1
+          firstFailedZone = i+1
 
         elseif (fractionFluidized(i) > 1.0001) then !trz
           fractionFluidized (i) = 1.0001     !trz
@@ -716,8 +716,8 @@ else
     wasteStore = wasteStore+deltaWaste
 
     !remove from store
-    charVel = MAX(MinCharVel,superficialVelocity(firstIntactZone))
-    cavityCharTime = reposRadius(firstIntactZone)/charVel
+    charVel = MAX(MinCharVel,superficialVelocity(firstFailedZone))
+    cavityCharTime = reposRadius(firstFailedZone)/charVel
     storeLostRatio = deltaTime/cavityCharTime
 
     dVolStore   = storeLostRatio*volStore

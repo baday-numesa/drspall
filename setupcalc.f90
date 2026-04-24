@@ -889,6 +889,11 @@ end do
 ! Initialize failure-related variables.
 maxTensileFailedIndex = 0
 maxShearFailedIndex   = 0
+! 2026 BC-revision: firstIntactZone (renamed from prior usage) is now the
+! cavity wall / first non-fluidized cell. firstIntactZone (NEW) is the inner
+! edge of the intact-waste region used by CalculateWasteStresses; equals
+! firstFailedZone until tensile failure has completed in at least one cell.
+firstFailedZone       = 1
 firstIntactZone       = 1
 fluidizationVelocity  = 1.0 !(arbitrary)
 
@@ -911,7 +916,7 @@ Call CalculateWasteStresses
 
 
 ! Boundary variables for plotting
-poreVelocity(firstIntactZone) = 0.0
+poreVelocity(firstFailedZone) = 0.0
 wasteBoundaryPoreVelocity     = 0.0
 
 

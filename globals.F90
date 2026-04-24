@@ -78,7 +78,17 @@ Real(8) , DIMENSION(:), ALLOCATABLE :: aa, bb, cc, rr, gam
 !dkr Integer(2)
 Integer geomExponent
 !dkr Integer(4)
-Integer numReposZones, maxTensileFailedIndex, maxShearFailedIndex, firstIntactZone, &
+! 2026 BC-revision: nomenclature change in support of moving the radial
+! effective-stress inner BC from the cavity wall to the failed/intact interface.
+!   firstFailedZone : first non-fluidized cell -- inner edge of the failed-but-
+!                     not-yet-fluidized annulus (i.e. the cavity wall). Was
+!                     previously named firstIntactZone throughout the code.
+!   firstIntactZone : first cell whose tensile failure has NOT completed --
+!                     inner edge of the intact waste, where the stress
+!                     calculation now initiates.
+! When no failed annulus exists, firstIntactZone == firstFailedZone.
+Integer numReposZones, maxTensileFailedIndex, maxShearFailedIndex, &
+           firstFailedZone, firstIntactZone, &
            interface1, interface2, lastFailedZone, firstInternalFailedZone, &
            minNumLt
 Real(8) reposZoneSize, wasteBoundaryPoreVelocity, sumReposGasMass, &
@@ -238,7 +248,8 @@ Real(8) displayedTime, &  !apg Real
   displayedMudVelocity, displayedMudVolRate, displayedMudEjected, displayedGasEjected, &
   displayedWasteEjected, displayedSaltEjected, &
   displayedMudExitFraction, displayedGasExitFraction, displayedWasteExitFraction, displayedSaltExitFraction, &
-  displayedGasPosInWell, displayedWastePosInWell, displayedradEffStress, displayedFirstIntactZone
+  displayedGasPosInWell, displayedWastePosInWell, displayedradEffStress, &
+  displayedFirstFailedZone, displayedFirstIntactZone
 
 Integer cellControl(5), oldCellControl,stepControl, oldStepControl
 Integer DisplayedCell

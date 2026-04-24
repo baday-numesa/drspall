@@ -279,6 +279,8 @@ Write(summaryFileID, 1000)'Cavity Rad.        :', displayedCavityRadius
 Write(summaryFileID, 1000)'Tensile F. Rad.    :', displayedTensileFailedRadius
 Write(summaryFileID, 1000)'Shear F. Rad.      :', displayedShearFailedRadius
 Write(summaryFileID, 1000)'Rad. Eff. Stress   :', displayedRadEffStress
+! 2026 BC-revision: report both interface indices in the summary file.
+Write(summaryFileID, 1000)'First Failed Zone  :', displayedFirstFailedZone
 Write(summaryFileID, 1000)'First Intact Zone  :', displayedFirstIntactZone
 Write(summaryFileID, 1000)'Gas Injected       :', displayedGasInjected
 Write(summaryFileID, 1000)'Mud in Well        :', displayedMudInWell
@@ -390,12 +392,14 @@ if (maxTensileFailedIndex <= 20 .or. &
   write(stressValidationFileID, 100) 'DrilledRad(m) =', curDrilledRadius
   write(stressValidationFileID, 100) 'CavityVol(m^3)=', wellVol(wellbottomindex)
   write(stressValidationFileID, 100) 'Pff(Pa)       =', repospres(numReposZones)
-  Write(stressValidationFileID, '(A17, I5)')'FirstIntactZone=' , FirstIntactZone
+  ! 2026 BC-revision: emit both interface indices for traceability.
+  Write(stressValidationFileID, '(A17, I5)')'firstFailedZone=' , firstFailedZone
+  Write(stressValidationFileID, '(A17, I5)')'firstIntactZone=' , firstIntactZone
   write(stressValidationFileID, '(A15, 8a21)') &
         'zone index', 'Radius(m)', 'PorePres(Pa)', &
         'ElastStr(Pa)', 'SeepStr(Pa)', 'EffStre(Pa)','Failed(T/F)', 'Fluidized(-)'
 
-  do i = max(1,firstIntactZone-10), firstIntactZone+20
+  do i = max(1,firstFailedZone-10), firstFailedZone+20
     write (stressValidationFileID, 200) &
       i , reposRadius(i), repospres(i), radElasticStress(i), radSeepageStress(i), &
       radEffStress(i), tensileFailureStarted(i), drillingfailure(i)*fractionFluidized(i)
@@ -419,11 +423,11 @@ Implicit None
 Integer i
 Real(8) curGasDensity
 
- if (firstIntactZone <=70 .or. & !trz
-   (firstIntactZone >100 .and. firstIntactzone < 150)) then 
+ if (firstFailedZone <=70 .or. & !trz
+   (firstFailedZone >100 .and. firstFailedZone < 150)) then 
   i = 0
 
-  curGasDensity = gasBaseDensity*(reposPres(firstIntactZone)/AtmosphericPressure)
+  curGasDensity = gasBaseDensity*(reposPres(firstFailedZone)/AtmosphericPressure)
 
   write(fluidizationValidationFileID, '(A)') ''
   write(fluidizationValidationFileID, 100) 'Runtime (sec)              =', runtime
@@ -431,17 +435,19 @@ Real(8) curGasDensity
   write(fluidizationValidationFileID, 100) 'Cavity Radius(m)           =', curCavityRadius
   write(fluidizationValidationFileID, 100) 'Gas Density (kg/m^3)       =', curGasDensity
   write(fluidizationValidationFileID, 100) 'Fluidization Velocity(m)   =', fluidizationVelocity
+  ! 2026 BC-revision: relabel for new nomenclature; emit both interface indices.
   write(fluidizationValidationFileID, 100) 'Superficial Gas Velocity(m) '
-  write(fluidizationValidationFileID, 100) '        (First Intact Zone)=', superficialVelocity(firstintactZone)
+  write(fluidizationValidationFileID, 100) '        (First Failed Zone)=', superficialVelocity(firstFailedZone)
   write(fluidizationValidationFileID, 100) 'Waste In Well (kg)         =', totalWasteInWell
-  Write(fluidizationValidationFileID, '(A30, I5)') 'FirstIntactZone       ', FirstIntactZone
+  Write(fluidizationValidationFileID, '(A30, I5)') 'firstFailedZone       ', firstFailedZone
+  Write(fluidizationValidationFileID, '(A30, I5)') 'firstIntactZone       ', firstIntactZone
   write(fluidizationValidationFileID, '(A)') ''
   write(fluidizationValidationFileID, 150)  &
   'Cell', '          ',  'Failure',       'Fluidization', 'Fluidization',  'Fraction'
   write(fluidizationValidationFileID, 150) &
   'index', 'Radius(m)',  'Completed(T/F)','Start(T/F)',   'Complete(T/F)', 'Fluidized'
 
-  do i = max(1,firstIntactZone-10), firstIntactZone+20
+  do i = max(1,firstFailedZone-10), firstFailedZone+20
     write (fluidizationValidationFileID, 200) &
       i , reposRadius(i), tensileFailureCompleted(i), &
       fluidizationStarted(i), fluidizationCompleted(i), drillingFailure(i)*fractionFluidized(i)
@@ -496,7 +502,7 @@ Integer i
 currentGasInRepository = 0.0
 
 
-do i = firstIntactZone, numReposZones
+do i = firstFailedZone, numReposZones
 
     currentGasInRepository = currentGasInRepository + &
         (reposPres(i)*reposVol(i)*repositoryInitialPorosity) &
@@ -531,9 +537,9 @@ Implicit None
 Real(8) massWasteRemoved, initialCavityWasteMass, error
 Integer i, zonesRemoved
 
-zonesremoved = firstIntactZone - 1
+zonesremoved = firstFailedZone - 1
 
-if(firstIntactZone >1)then
+if(firstFailedZone >1)then
 ! mass=rho*volume*(1-porosity)
 massWasteRemoved = wasteDensity*((2.0d0/3.0d0)*pi*(curCavityRadius**geomExponent)-initialCavityVol)* &
                         (1.0d0-repositoryInitialPorosity)

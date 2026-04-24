@@ -714,7 +714,7 @@ HisVal(38) = mudPumpRate
 HisVal(39) = reposRadiusH(maxShearFailedIndex+1)
 HisVal(40) = wellDeltaVInt(wellBottomIndex)
 HisVal(41) = wellV        (wellBottomIndex+1)
-HisVal(42) = fluidizationTime(firstIntactZone-1)
+HisVal(42) = fluidizationTime(firstFailedZone-1)
 HisVal(43) = sumWellWasteMass
 HisVal(44) = totalWasteFromRepos
 HisVal(45) = cavityWasteMass+wasteStore+curWasteEjected+sumWellWasteMass
@@ -757,8 +757,8 @@ integer idum
 !IF(numReposZones .NE. NUMEL) call QAABORT ('NUMEL problem')  !apg was STOP
 
 ! add spatial dependent variables to CDB for current time
-if(firstintactzone > 1)then
-  do i = 1,firstintactZone-1
+if(firstFailedZone > 1)then
+  do i = 1,firstFailedZone-1
     DO j= 3, 8
       EleVal(i,j) = 0.
     ENDDO
@@ -777,7 +777,7 @@ if(firstintactzone > 1)then
   enddo
 endif
 
-do i =firstintactZone,numReposZones
+do i =firstFailedZone,numReposZones
     EleVal(i,1) = reposPres(i)
     EleVal(i,2) = radEffStress(i)
     EleVal(i,3) = tanEffStress(i)
