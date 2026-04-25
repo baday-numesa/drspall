@@ -78,14 +78,14 @@ Real(8) , DIMENSION(:), ALLOCATABLE :: aa, bb, cc, rr, gam
 !dkr Integer(2)
 Integer geomExponent
 !dkr Integer(4)
-! 2026 BC-revision: nomenclature change in support of moving the radial
-! effective-stress inner BC from the cavity wall to the failed/intact interface.
-!   firstFailedZone : first non-fluidized cell -- inner edge of the failed-but-
-!                     not-yet-fluidized annulus (i.e. the cavity wall). Was
-!                     previously named firstIntactZone throughout the code.
-!   firstIntactZone : first cell whose tensile failure has NOT completed --
-!                     inner edge of the intact waste, where the stress
-!                     calculation now initiates.
+! 2026 BC-revision: stress problem is posed on the intact-waste domain with
+! the radial-stress inner BC applied at the failed/intact interface.
+!   firstFailedZone : inner edge of the failed/fluidizing annulus. Advances
+!                     on fluidization completion.
+!   firstIntactZone : inner edge of the intact waste; stress anchor.
+!                     Advances in Lt-batch-sized jumps on batch completion.
+!   batchEndZone    : outer cell of the active Lt tensile-failure batch; 0
+!                     when no batch is active (surfaceFailureAllowed=.TRUE.).
 ! When no failed annulus exists, firstIntactZone == firstFailedZone.
 Integer numReposZones, maxTensileFailedIndex, maxShearFailedIndex, &
            firstFailedZone, firstIntactZone, &
@@ -94,9 +94,8 @@ Integer numReposZones, maxTensileFailedIndex, maxShearFailedIndex, &
 Real(8) reposZoneSize, wasteBoundaryPoreVelocity, sumReposGasMass, &
         totalGasFromWaste, totalWasteFromRepos, maxForchRatio
 
-!JFS3
 !dkr Integer(4), Logical(1)
-Integer fluidizationWaitZone
+Integer batchEndZone
 Logical surfaceFailureAllowed
 
 ! Cavity

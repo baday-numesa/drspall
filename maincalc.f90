@@ -253,12 +253,8 @@ oldCellControl   = cellControl(oldStepControl)
           !--------------------
 
 if (runtime > (timeOfPenetration-1.0)) then
-  ! 2026 BC-revision: governing cell for the tensile-failure timestep limit
-  ! is the inner edge of the intact region (firstIntactZone, NEW), where
-  ! tensile failure is actively progressing. The old code used firstIntactZone
-  ! (now firstFailedZone) -- the cavity wall -- which under the new scheme is
-  ! at the inner edge of the already-failed annulus, no longer the location
-  ! where the failure-rate constraint is most restrictive.
+  ! Tensile-failure timestep limit uses firstIntactZone -- the inner edge of
+  ! the intact region, where the active Lt batch progresses.
   tensileFailureAllowedDeltaTime = 0.1*tensileFailureTime(firstIntactZone)
   if (allowedDeltaTime > tensileFailureAllowedDeltaTime) then
     allowedDeltaTime = tensileFailureAllowedDeltaTime

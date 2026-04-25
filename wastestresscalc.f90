@@ -2,24 +2,36 @@
 !
 ! File WasteStressCalc.f90, contains routines for the stress calculation
 !
-! 2026 BC-revision (radial effective-stress inner boundary condition):
-!   Tensile-failed (disaggregated) waste cannot transmit deviatoric stress;
-!   it only transmits its local pore pressure isotropically. The intact-rock
-!   stress problem must therefore be posed on the *intact* domain only --
-!   i.e. starting at the failed/intact interface, not at the cavity wall --
-!   and the inner radial-stress BC must be the local pore pressure at that
-!   interface (taken from the gas-flow solution which spans the entire waste
-!   domain), not the cavity pressure.
+! 2026 BC-revision: the radial effective-stress inner boundary condition is
+! applied at the failed/intact interface using the local pore pressure from
+! the gas-flow solution. Stresses are posed on the intact domain only;
+! tensile-failed (disaggregated) waste transmits pore pressure isotropically
+! but carries no deviatoric stress.
 !
-! Index conventions used here:
-!   firstFailedZone : first non-fluidized cell (cavity wall). Was previously
-!                     named firstIntactZone in the codebase.
-!   firstIntactZone : first cell whose tensile failure has NOT completed --
-!                     inner edge of the intact region; derived locally below
-!                     by scanning outward from firstFailedZone.
-!   When no tensile-failed annulus exists, firstIntactZone == firstFailedZone
-!   and the new inner-BC pressure degenerates cleanly to cavityPres
-!   (the flow solver overwrites reposPres(firstFailedZone) <- cavityPres).
+! Index conventions:
+!   firstFailedZone : inner edge of the failed/fluidizing annulus. Advances
+!                     on fluidization completion.
+!   firstIntactZone : inner edge of the intact waste; anchor for the stress
+!                     problem. Advances in Lt-batch-sized jumps on batch
+!                     completion.
+!   batchEndZone    : outer cell of the currently progressing Lt batch; 0
+!                     when no batch is active (surfaceFailureAllowed=.TRUE.).
+!   When no failed annulus exists, firstIntactZone == firstFailedZone and
+!   pInterface reduces to cavityPres (the flow solver pins
+!   reposPres(firstFailedZone) <- cavityPres).
+!
+! Tensile-failure cycle:
+!   1. No active batch: the first Lt of intact rock [firstIntactZone, LtZone]
+!      is the candidate batch. If -aveRadStress over that window exceeds
+!      tensileStrength, every cell in the window is flagged
+!      (tensileFailureStarted) and batchEndZone is set to LtZone.
+!   2. Active batch: fractionTensileFailed(i) accumulates per its
+!      tensileFailureTime for each cell in [firstIntactZone, batchEndZone],
+!      gated on the batch's current aveRadStress exceeding tensileStrength.
+!   3. When the outer cell of the batch reaches fractionTensileFailed >= 1,
+!      the whole batch flips tensileFailureCompleted simultaneously,
+!      firstIntactZone jumps to batchEndZone+1, and surfaceFailureAllowed
+!      returns to .TRUE.
 !
 !-----------------------------------------------------------------------------------------
 
@@ -57,30 +69,19 @@ S0 = 0.5*cohesion/(mu+DSqrt(mu**2+1.0))
 
 
 !------------------------------------------------------------
-! 2026 BC-revision: derive firstIntactZone (NEW) and the
-! inner-BC pressure/radius for the intact-rock stress problem.
+! Inner-BC pressure/radius for the intact-rock stress problem.
+! firstIntactZone is persistent state updated by the tensile-failure batch
+! logic below; no per-call rescan is performed.
 !------------------------------------------------------------
-
-! Scan outward from the cavity-front cell. firstIntactZone = first cell whose
-! tensile failure has NOT completed. If firstFailedZone itself is intact, this
-! immediately exits with firstIntactZone == firstFailedZone (graceful
-! degeneration to old behavior in the no-failure regime).
-firstIntactZone = firstFailedZone
-do while (firstIntactZone <= numReposZones)
-  if (.NOT. tensileFailureCompleted(firstIntactZone)) exit
-  firstIntactZone = firstIntactZone + 1
-end do
 
 ! Inner mechanical boundary is at the inner face of the first intact cell.
 rInterface = reposRadiusH(firstIntactZone)
 
-! Interpolate pore pressure to the failed/intact interface using the same
-! reposFactor convention used elsewhere for half-grid pressures (see pL). When
-! firstIntactZone == firstFailedZone the flow solver has already pinned
-! reposPres(firstFailedZone) = cavityPres, so this gives pInterface = cavityPres
-! and the new BC reduces to old-code behavior.
+! Pore pressure at the failed/intact interface. When firstIntactZone ==
+! firstFailedZone there is no failed annulus and the flow solver has pinned
+! reposPres(firstFailedZone) = cavityPres, so pInterface = cavityPres.
 if (firstIntactZone == firstFailedZone) then
-  pInterface = reposPres(firstFailedZone)   ! == cavityPres after flow solve
+  pInterface = reposPres(firstFailedZone)
 else
   pInterface = reposPres(firstIntactZone-1) &
              + reposFactor(firstIntactZone) &
@@ -111,11 +112,8 @@ end do
 !Calculate Elastic Stress
 !------------------------
 
-! 2026 BC-revision: inner BC moved from cavity wall (cavityPres at
-! reposRadius(firstFailedZone)) to failed/intact interface (pInterface at
-! rInterface = reposRadiusH(firstIntactZone)).
+! Lame solution on the intact domain with inner BC pInterface at rInterface.
 do i = firstIntactZone, numReposZones
-  ! Elastic Stresses (Lame solution; inner BC = pInterface at rInterface)
   temp1 = (rInterface/reposRadius(i))**geomExponent
   radElasticStress(i) =  (pInterface-farfieldStress)*temp1    +farfieldStress
   tanElasticStress(i) = -(pInterface-farfieldStress)*temp1/mm1+farfieldStress
@@ -136,18 +134,10 @@ enddo
 ! Seepage Stress, Total Stress and Effective Stress
 !------------------------------------------------
 
-! 2026 BC-revision: integration starts at the failed/intact interface
-! rInterface with pressure pInterface. The first trapezoid is a special case
-! spanning [rInterface, reposRadius(firstIntactZone)] -- a half-cell width --
-! and uses pInterface at the lower limit. Subsequent trapezoids span between
-! adjacent cell centers (width reposDRH(i)) as before.
-!
-! The (1 - fractionFluidized(i)) factor that was present here in the prior
-! version has been removed: by construction every cell in the new integration
-! range [firstIntactZone, numReposZones] has tensileFailureCompleted == FALSE
-! and therefore fractionFluidized == 0 (fluidization can only initiate after
-! tensile failure completes). Retaining the factor would falsely imply that
-! partial fluidization could occur within the integration domain.
+! Trapezoidal integration of (p' * r^(m-1)) across the intact domain starting
+! at (rInterface, pInterface). The first trapezoid spans the half-cell
+! [rInterface, reposRadius(firstIntactZone)]; subsequent trapezoids span
+! between adjacent cell centers with width reposDRH(i).
 
 integral1 = 0.0
 pff       = reposPres(numReposZones)
@@ -159,14 +149,11 @@ Do i = firstIntactZone, numReposZones
     pPrime = pNew - pff
 
     if(i == firstIntactZone) then
-      ! First trapezoid: from face (rInterface, pInterface) to cell center
-      ! (reposRadius(i), reposPres(i)). Width = half cell = 0.5*reposDR(i).
       pPrimeR = 0.50d0*( (pInterface  -pff)*rInterface       **mm1 &
                         +(reposPres(i)-pff)*reposRadius(i)   **mm1 )
       drFirst = reposRadius(i) - rInterface       ! = 0.5*reposDR(i)
       integral1 = integral1 + pPrimeR*drFirst
     else
-      ! Cell-center to cell-center trapezoid (unchanged form).
       pPrimeR = 0.50d0*( (reposPres(i-1)-pff)*reposRadius(i-1)**mm1 &
                         +(reposPres(i)  -pff)*reposRadius(i)  **mm1 )
       integral1 = integral1 + pPrimeR*reposDRH(i)
@@ -194,109 +181,114 @@ Do i = firstIntactZone, numReposZones
 
 enddo
 
-! Failure only if repository is penetrated
-if (repositoryPenetrated) then
-    	
+! Failure only if repository is penetrated and intact waste remains
+if (repositoryPenetrated .and. firstIntactZone <= numReposZones) then
 
-  ! check average of first N zones <= characteristic length, Lt
-  i=firstIntactZone+1
-  do while (reposRadiusH(i)-reposRadiusH(firstIntactZone) <= 0.9999*Lt)
-   i = i+1
-  enddo
-  LtZone = i-1
+  ! Lt window:
+  !   surfaceFailureAllowed -> no active batch, candidate window is the first
+  !                            Lt of intact rock starting at firstIntactZone.
+  !   else                  -> active batch, window is [firstIntactZone,
+  !                            batchEndZone] (firstIntactZone is pinned for
+  !                            the lifetime of the batch, batchEndZone is
+  !                            fixed at initiation).
+  if (surfaceFailureAllowed) then
+    i = firstIntactZone + 1
+    do while (i <= numReposZones+1)
+      if (reposRadiusH(i)-reposRadiusH(firstIntactZone) > 0.9999d0*Lt) exit
+      i = i + 1
+    enddo
+    LtZone = min(i-1, numReposZones)
+  else
+    LtZone = batchEndZone
+  endif
 
-  ! calculate average stress over characteristic failure length
-  aveRadStress  = 0.0
-  aveTanStress  = 0.0
-
+  ! Group-averaged stresses over the Lt window.
+  aveRadStress = 0.0d0
+  aveTanStress = 0.0d0
   do i = firstIntactZone, LtZone
-    aveRadStress  = aveRadStress  + radEffStress(i)
-    aveTanStress  = aveTanStress  + tanEffStress(i)
+    aveRadStress = aveRadStress + radEffStress(i)
+    aveTanStress = aveTanStress + tanEffStress(i)
   enddo
-
-  temp1 = dble(LtZone-firstIntactZone+1)  !apg real(
+  temp1 = dble(LtZone - firstIntactZone + 1)
   aveRadStress   = aveRadStress/temp1
   aveTanStress   = aveTanStress/temp1
-  aveShrStress   = 0.5*DAbs(aveRadStress-aveTanStress)
-  aveMeanStress  = (aveRadStress+mm1*aveTanStress)/geomExponent
-  aveShrStrength = S0+aveMeanStress*Tan(frictionAngle)
+  aveShrStress   = 0.5d0*DAbs(aveRadStress - aveTanStress)
+  aveMeanStress  = (aveRadStress + mm1*aveTanStress)/geomExponent
+  aveShrStrength = S0 + aveMeanStress*Tan(frictionAngle)
 
-  do i= firstIntactZone, numreposZones
+  ! Shear failure flag: Lt-averaged criterion inside the window, point-wise
+  ! criterion outside.
+  do i = firstIntactZone, numReposZones
+    meanEffStress(i) = (radEffStress(i) + mm1*tanEffStress(i))/geomExponent
+    shearStrength(i) = S0 + meanEffStress(i)*Tan(frictionAngle)
 
-    meanEffStress(i) = (radEffStress(i)+mm1*tanEffStress(i))/geomExponent
-    shearStrength(i) = S0+meanEffStress(i)*Tan(frictionAngle)
-
-
-    ! flag shear failed zones
-    if ((i > LtZone .and. shearStress(i) > shearStrength(i)) .or. &
-        (i <=LtZone .and. aveShrStress   > aveShrStrength  )) then
-        shearFailed(i) = .TRUE.
+    if ((i >  LtZone .and. shearStress(i) > shearStrength(i)) .or. &
+        (i <= LtZone .and. aveShrStress   > aveShrStrength  )) then
+      shearFailed(i) = .TRUE.
     endif
   enddo
 
+  ! Tensile failure batch state machine.
+  if (surfaceFailureAllowed) then
 
-  do i= firstIntactZone, LtZone
+    ! No active batch. The Lt window is the candidate group; if the group-
+    ! averaged radial effective stress is tensile enough, flag the whole
+    ! group for failure and open a batch with batchEndZone = LtZone.
+    if (-aveRadStress > tensileStrength) then
+      do i = firstIntactZone, LtZone
+        if (.NOT. tensileFailureStarted(i)) then
+          tensileFailureStarted(i) = .TRUE.
+          failStartTime(i)         = runTime
 
-    ! tensile failure initialization
-    if ((.NOT.tensileFailureStarted(i)) .AND. &
-        (runTime*TensileVelocity > reposRadius(i) - initialCavityRadius) ) then
-
-      Ltemp1 = (surfaceFailureAllowed  .and. (-aveRadStress > tensileStrength))
-
-      if ( Ltemp1 ) then
-
-        tensileFailureStarted(i) = .TRUE.
-        failStartTime(i) = runTime
-		if (i == LtZone) then
-		  surfaceFailureAllowed = .False.
-		  fluidizationWaitZone = i
+          if (validationTestCase == 4) then
+            stressSaveTime = runTime
+            write (stressValidationFileID, '(A)') ''
+            write (stressValidationFileID, '(A5, I5, A10, F10.5, A5)') &
+              'zone', i, 'failed at', runtime, 'sec'
+          endif
         endif
-
-        ! test case #4 print out
-		if (validationTestCase == 4) then
-			stressSaveTime = runTime
-			write (stressValidationFileID, '(A)') ''
-			write (stressValidationFileID, '(A5, I5, A10, F10.5, A5)') 'zone', i,'failed at', runtime, 'sec'
-		endif
-      endif
+      enddo
+      batchEndZone          = LtZone
+      surfaceFailureAllowed = .FALSE.
     endif
 
+  else
 
-    ! tensile failure in progress
-    if ((tensileFailureStarted  (i)) .AND. &
-        (.NOT.tensileFailureCompleted(i))) then
+    ! Active batch. Each cell's fractionTensileFailed ticks at its own
+    ! tensileFailureTime while the group's aveRadStress remains above
+    ! tensileStrength (prevents brief tensile excursions from completing
+    ! the batch).
+    if (-aveRadStress > tensileStrength) then
+      do i = firstIntactZone, batchEndZone
+        if (tensileFailureStarted(i) .AND. .NOT. tensileFailureCompleted(i)) then
+          fractionTensileFailed(i) = fractionTensileFailed(i) &
+                                   + deltaTime/tensileFailureTime(i)
+        endif
+      enddo
+    endif
 
-!JFS to not allow brief excursion over tensile to trigger ultimate failure
-	  Ltemp1 = (-aveRadStress > tensileStrength)
-
-	  if (Ltemp1) then
-  	    fractionTensileFailed(i) = fractionTensileFailed(i) &
-                                  +deltaTime/tensileFailureTime(i)
-      endif
-
-      if (fractionTensileFailed(i) > 1.0) then
-        fractionTensileFailed  (i) = 1.0
+    ! tensileFailureTime scales with radius, so the outer cell is the last
+    ! of the group to reach fraction == 1. When it does, the whole batch
+    ! flips to completed simultaneously, firstIntactZone jumps past the
+    ! batch, and surfaceFailureAllowed re-opens for the next cycle.
+    if (fractionTensileFailed(batchEndZone) >= 1.0d0) then
+      do i = firstIntactZone, batchEndZone
+        fractionTensileFailed  (i) = 1.0d0
         tensileFailureCompleted(i) = .TRUE.
         lastFailedZone = max(lastFailedZone, i)
-      endif
-
+      enddo
+      firstIntactZone       = batchEndZone + 1
+      batchEndZone          = 0
+      surfaceFailureAllowed = .TRUE.
     endif
 
-  end do
-
-
-  ! stress-related indices
-  if (repositoryPenetrated) then
-    do i = firstIntactZone, numReposZones
-      if (tensileFailureCompleted(i)) then
-        maxTensileFailedIndex = i
-      endif
-      if (shearFailed(i)) then
-        maxShearFailedIndex = i
-
-      endif
-    end do
   endif
+
+  ! but-not-yet-fluidized annulus is included in the max-extent tallies.
+  do i = firstFailedZone, numReposZones
+    if (tensileFailureCompleted(i)) maxTensileFailedIndex = i
+    if (shearFailed            (i)) maxShearFailedIndex   = i
+  enddo
 
 endif
 

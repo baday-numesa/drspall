@@ -563,9 +563,6 @@ else
       fractionFluidized      (firstFailedZone) = 1.0d0
       drillingfailure        (firstFailedZone) = -1.0d0
 
-! Allow resetting of Lt region near wellbore after new zone
-	  surfaceFailureAllowed = .True.
-
       deltaVol = reposVol(firstFailedZone)
       TotVol   = TotVol + deltaVol*(1.0d0-repositoryInitialPorosity)
 
@@ -649,13 +646,6 @@ else
         if (fractionFluidized(i) > 1.0 .AND. i == firstFailedZone) then
           fractionFluidized    (i) = 1.0
           fluidizationCompleted(i) = .TRUE.
-
-!JFS3
-          if (i == fluidizationWaitZone) then
-		    surfaceFailureAllowed = .True.
-          endif
-
-
 
           fluidStopTime(i) = runTime
 !dkr

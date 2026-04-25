@@ -19,8 +19,7 @@ displayedTime           = runTime
 displayedPumpPressure   = wellPres(1)
 displayedBitAbove       = bitAboveRepository
 displayedCavityPressure = cavityPres
-! 2026 BC-revision: cavity radius is the inner edge of the cavity-front cell
-! (renamed from firstIntactZone -> firstFailedZone); physical meaning unchanged.
+! Cavity radius is the inner edge of the cavity-front cell (firstFailedZone).
 displayedCavityRadius   = reposRadius(firstFailedZone)-0.5*reposZoneSize
 !displayedCavityRadius   = reposRadiusH(firstFailedZone)  !dkr V1.22
 displayedWellBottomPressure        = wellPres(wellBottomIndex)
@@ -39,11 +38,8 @@ else
   displayedShearFailedRadius = displayedCavityRadius
 end if
 
-! 2026 BC-revision: under the new scheme stress in the failed annulus is zero
-! (no deviatoric capacity), so radEffStress(firstFailedZone) = 0 by
-! construction. The physically meaningful displayed scalar is the radial
-! effective stress at the failed/intact interface -- the inner edge of the
-! intact region where the BC is applied.
+! Stress in the failed annulus is zero (no deviatoric capacity); the displayed
+! scalar is the radial effective stress at the failed/intact interface.
 displayedRadEffStress    = radEffStress(firstIntactZone)
 displayedFirstFailedZone = firstFailedZone
 displayedFirstIntactZone = firstIntactZone

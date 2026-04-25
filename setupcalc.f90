@@ -803,8 +803,8 @@ CALL allocateReposArrays
 
 fluidizationTime(0) = 0.0
 
-!JFS3
-fluidizationWaitZone = 0
+! 2026 BC-revision: tensile-failure batch state.
+batchEndZone          = 0
 surfaceFailureAllowed = .True.
 
 reposRadius (0) = initialCavityRadius - 0.5*ReposZoneSize
@@ -889,10 +889,9 @@ end do
 ! Initialize failure-related variables.
 maxTensileFailedIndex = 0
 maxShearFailedIndex   = 0
-! 2026 BC-revision: firstIntactZone (renamed from prior usage) is now the
-! cavity wall / first non-fluidized cell. firstIntactZone (NEW) is the inner
-! edge of the intact-waste region used by CalculateWasteStresses; equals
-! firstFailedZone until tensile failure has completed in at least one cell.
+! 2026 BC-revision: firstFailedZone is the inner edge of the failed annulus
+! (cavity wall); firstIntactZone is the inner edge of the intact waste and
+! anchor of the stress problem. Both start at cell 1 before any failure.
 firstFailedZone       = 1
 firstIntactZone       = 1
 fluidizationVelocity  = 1.0 !(arbitrary)

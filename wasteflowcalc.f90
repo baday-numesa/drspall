@@ -2,11 +2,10 @@
 !
 ! File WasteFlowCalc.f90, contains routines for the waste porous flow calculation
 !
-! 2026 BC-revision: variable rename only -- the previous "firstIntactZone" was
-! semantically the inner edge of the flow domain (cavity wall / first non-
-! fluidized cell). It is renamed firstFailedZone throughout to free the name
-! firstIntactZone for the failed/intact interface used by stress code. No
-! flow-physics change -- gas BC is still cavityPres at the cavity wall.
+! 2026 BC-revision: flow domain inner edge is firstFailedZone (the cavity
+! wall / first non-fluidized cell); gas BC is cavityPres at that location.
+! firstIntactZone is reserved for the failed/intact interface used by the
+! stress code and is not referenced here.
 !
 !--------------------------------------------------------------------------------
 
